@@ -5,31 +5,25 @@ from collections import deque
 
 SPLUNK_PAYLOAD_LIMIT = 262144  # 256KB, Actual limit is 512KB
 
-
 class hass_splunk:
     """Splunk HTTP Event Collector interface for Home Assistant"""
 
     def __init__(
         self,
+        session,
         token,
         host,
-        port="8088",
-        ssl=True,
-        ssl_verify=True,
+        port=8088,
+        use_ssl=True,
+        verify_ssl=True,
         endpoint="collector/event",
         timeout=5,
-        session=None,
     ):
-        # self.token = token
-        # self.host = host
-        # self.port = port
-        # self.ssl = ssl
-        self.ssl_verify = ssl_verify
-        # self.endpoint = endpoint
-        self.url = f"{['http','https'][ssl]}://{host}:{port}/services/{endpoint}"
+        self.session = session
+        self.url = f"{['http','https'][use_ssl]}://{host}:{port}/services/{endpoint}"
+        self.verify_ssl = verify_ssl
         self.headers = {"Authorization": f"Splunk {token}"}
         self.timeout = aiohttp.ClientTimeout(total=timeout)
-        self.session = session or aiohttp.ClientSession()
         self.batch = deque()
         self.lock = asyncio.Lock()
 
@@ -67,7 +61,7 @@ class hass_splunk:
                     async with self.session.post(
                         self.url,
                         data="\n".join(events),
-                        ssl=self.ssl_verify,
+                        ssl=self.verify_ssl,
                         headers=self.headers,
                         timeout=self.timeout,
                     ) as resp:
@@ -103,11 +97,13 @@ class hass_splunk:
         try:
             async with self.session.post(
                 self.url,
-                ssl=self.ssl_verify,
+                ssl=self.verify_ssl,
                 headers=self.headers,
                 timeout=self.timeout,
             ) as resp:
                 reply = await resp.json()
+        except aiohttp.ClientConnectionError:
+            return not connectivity
         except Exception:
             return False
         return codes.get(reply["code"], False)
