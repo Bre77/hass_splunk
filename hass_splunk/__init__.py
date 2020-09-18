@@ -20,12 +20,12 @@ class hass_splunk:
         timeout=5,
         session=None,
     ):
-        #self.token = token
-        #self.host = host
-        #self.port = port
-        #self.ssl = ssl
+        # self.token = token
+        # self.host = host
+        # self.port = port
+        # self.ssl = ssl
         self.ssl_verify = ssl_verify
-        #self.endpoint = endpoint
+        # self.endpoint = endpoint
         self.url = f"{['http','https'][ssl]}://{host}:{port}/services/{endpoint}"
         self.headers = {"Authorization": f"Splunk {token}"}
         self.timeout = aiohttp.ClientTimeout(total=timeout)
@@ -33,7 +33,7 @@ class hass_splunk:
         self.batch = deque()
         self.lock = asyncio.Lock()
 
-    async def queue(self,payload,send=True):
+    async def queue(self, payload, send=True):
         if not isinstance(payload, str):
             payload = json.dumps(payload)
 
@@ -64,39 +64,50 @@ class hass_splunk:
                         break
                 # Send the selected events
                 try:
-                    async with self.session.post(self.url, data="\n".join(events), ssl=self.ssl_verify, headers=self.headers, timeout=self.timeout) as resp:
+                    async with self.session.post(
+                        self.url,
+                        data="\n".join(events),
+                        ssl=self.ssl_verify,
+                        headers=self.headers,
+                        timeout=self.timeout,
+                    ) as resp:
                         reply = await resp.json()
-                    if reply['code'] != 0:
-                        raise Warning(reply['text'])
+                    if reply["code"] != 0:
+                        raise Warning(reply["text"])
                 except Exception as error:
                     # Requeue failed events before raising the error
                     self.batch = events + self.batch
                     raise error
         return True
-    
-    async def check(self,connectivity=True,token=True,busy=True):
-        codes ={
-            0: True, #Success
-            1: not token, #Token disabled
-            2: not token, #Token is required
-            3: not token, #Invalid authorization
-            4: not token, #Invalid token
-            5: True, #No data - Expected
-            6: True, #Invalid data format
-            7: True, #Incorrect index
-            8: False, #Internal server error
-            9: not busy, #Server is busy
-            10: False, #Data channel is missing
-            11: False, #Invalid data channel
-            12: None, #Event field is required
-            13: None, #Event field cannot be blank
-            14: None, #ACK is disabled
-            15: None, #Error in handling indexed fields
-            16: None, #Query string authorization is not enabled
+
+    async def check(self, connectivity=True, token=True, busy=True):
+        codes = {
+            0: True,  # Success
+            1: not token,  # Token disabled
+            2: not token,  # Token is required
+            3: not token,  # Invalid authorization
+            4: not token,  # Invalid token
+            5: True,  # No data - Expected
+            6: True,  # Invalid data format
+            7: True,  # Incorrect index
+            8: False,  # Internal server error
+            9: not busy,  # Server is busy
+            10: False,  # Data channel is missing
+            11: False,  # Invalid data channel
+            12: None,  # Event field is required
+            13: None,  # Event field cannot be blank
+            14: None,  # ACK is disabled
+            15: None,  # Error in handling indexed fields
+            16: None,  # Query string authorization is not enabled
         }
         try:
-            async with self.session.post(self.url, ssl=self.ssl_verify, headers=self.headers, timeout=self.timeout) as resp:
+            async with self.session.post(
+                self.url,
+                ssl=self.ssl_verify,
+                headers=self.headers,
+                timeout=self.timeout,
+            ) as resp:
                 reply = await resp.json()
         except Exception:
             return False
-        return codes.get(reply['code'],False)
+        return codes.get(reply["code"], False)

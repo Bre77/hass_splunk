@@ -1,1 +1,1 @@
-Advantage Air API Wrapper
+Splunk HEC for Home Assistant
