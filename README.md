@@ -1,6 +1,8 @@
-Splunk HEC for Home Assistant
+# Splunk HEC for Home Assistant
 
 Requires you create an aiohttp Client Session, or reuse your existing one from `homeassistant.helpers.aiohttp_client.async_get_clientsession`
+
+## Example
 
 ~~~~{.python}
 import asyncio
