@@ -5,6 +5,9 @@ from collections import deque
 
 SPLUNK_PAYLOAD_LIMIT = 262144  # 256KB, Actual limit is 512KB
 
+class SplunkError(Exception):
+    pass
+
 class hass_splunk:
     """Splunk HTTP Event Collector interface for Home Assistant"""
 
@@ -64,11 +67,18 @@ class hass_splunk:
                         ssl=self.verify_ssl,
                         headers=self.headers,
                         timeout=self.timeout,
+                        raise_for_status=True,
                     ) as resp:
                         reply = await resp.json()
-                    if reply["code"] != 0:
-                        raise Warning(reply["text"])
-                except Exception as error:
+                    #if resp.status == 400:
+                    #
+                    #if reply["code"] != 0:
+                    #    raise SplunkError(reply["text"])
+                except aiohttp.ClientResponseError as error:
+                    if error.status != 400:
+                        self.batch = events + self.batch
+                    raise error
+                except ClientConnectionError as error:
                     # Requeue failed events before raising the error
                     self.batch = events + self.batch
                     raise error
