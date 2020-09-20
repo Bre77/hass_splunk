@@ -80,7 +80,7 @@ class hass_splunk:
                                 self.batch = events + self.batch
                             raise SplunkPayloadError(code=reply["code"],message=reply["text"],status=resp.status)
                         
-                except (aiohttp.ClientConnectionError,aiohttp.ClientResponseError) as error:
+                except (aiohttp.ClientConnectionError,aiohttp.ClientResponseError,asyncio.TimeoutError) as error:
                     # Requeue failed events before raising the error
                     self.batch = events + self.batch
                     raise error
@@ -115,7 +115,7 @@ class hass_splunk:
                 timeout=self.timeout,
             ) as resp:
                 reply = await resp.json()
-        except aiohttp.ClientConnectionError:
+        except (aiohttp.ClientConnectionError,asyncio.TimeoutError):
             return not connectivity
         except Exception:
             return False
