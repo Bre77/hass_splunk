@@ -5,10 +5,11 @@ from collections import deque
 
 SPLUNK_PAYLOAD_LIMIT = 262144  # 256KB, Actual limit is 512KB
 
-class SplunkResponseError(aiohttp.ClientPayloadError):
-    def __init__(self,code,message):
+class SplunkPayloadError(aiohttp.ClientPayloadError):
+    def __init__(self,code,message,status):
         self.code = code
         self.message = message
+        self.status = status
         super().__init__(self.message)
 
 class hass_splunk:
@@ -75,15 +76,13 @@ class hass_splunk:
                         if "code" not in reply or "text" not in reply:
                             resp.raise_for_status()
                         if reply["code"] != 0:
-                            raise SplunkResponseError(code=reply["code"],message=reply["text"])
-                except aiohttp.ClientConnectionError as error:
+                            if resp.status != 400: # Dont reque on status 400
+                                self.batch = events + self.batch
+                            raise SplunkPayloadError(code=reply["code"],message=reply["text"],status=resp.status)
+                        
+                except (aiohttp.ClientConnectionError,aiohttp.ClientResponseError) as error:
                     # Requeue failed events before raising the error
                     self.batch = events + self.batch
-                    raise error
-                except aiohttp.ClientResponseError as error:
-                    # Dont reque on status 400
-                    if error.status != 400:
-                        self.batch = events + self.batch
                     raise error
                 
         return True
