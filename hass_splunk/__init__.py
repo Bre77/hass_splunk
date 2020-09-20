@@ -5,8 +5,11 @@ from collections import deque
 
 SPLUNK_PAYLOAD_LIMIT = 262144  # 256KB, Actual limit is 512KB
 
-class SplunkError(Exception):
-    pass
+class SplunkResponseError(aiohttp.ClientPayloadError):
+    def __init__(self,code,message):
+        self.code = code
+        self.message = message
+        super().__init__(self.message)
 
 class hass_splunk:
     """Splunk HTTP Event Collector interface for Home Assistant"""
@@ -66,22 +69,23 @@ class hass_splunk:
                         data="\n".join(events),
                         ssl=self.verify_ssl,
                         headers=self.headers,
-                        timeout=self.timeout,
-                        raise_for_status=True,
+                        timeout=self.timeout
                     ) as resp:
                         reply = await resp.json()
-                    #if resp.status == 400:
-                    #
-                    #if reply["code"] != 0:
-                    #    raise SplunkError(reply["text"])
-                except aiohttp.ClientResponseError as error:
-                    if error.status != 400:
-                        self.batch = events + self.batch
-                    raise error
-                except ClientConnectionError as error:
+                        if "code" not in reply or "text" not in reply:
+                            resp.raise_for_status()
+                        if reply["code"] != 0:
+                            raise SplunkResponseError(code=reply["code"],message=reply["text"])
+                except aiohttp.ClientConnectionError as error:
                     # Requeue failed events before raising the error
                     self.batch = events + self.batch
                     raise error
+                except aiohttp.ClientResponseError as error:
+                    # Dont reque on status 400
+                    if error.status != 400:
+                        self.batch = events + self.batch
+                    raise error
+                
         return True
 
     async def check(self, connectivity=True, token=True, busy=True):
