@@ -3,7 +3,26 @@ import asyncio
 import json
 from collections import deque
 
-SPLUNK_PAYLOAD_LIMIT = 262144  # 256KB, Actual limit is 512KB
+SPLUNK_PAYLOAD_LIMIT = 262144  # 256KB, Actual limit is 512KB/880MB depending on version.
+CODES = {
+    0: True,  # Success
+    1: not token,  # Token disabled
+    2: not token,  # Token is required
+    3: not token,  # Invalid authorization
+    4: not token,  # Invalid token
+    5: True,  # No data - Expected
+    6: True,  # Invalid data format
+    7: True,  # Incorrect index
+    8: False,  # Internal server error
+    9: not busy,  # Server is busy
+    10: False,  # Data channel is missing
+    11: False,  # Invalid data channel
+    12: None,  # Event field is required
+    13: None,  # Event field cannot be blank
+    14: None,  # ACK is disabled
+    15: None,  # Error in handling indexed fields
+    16: None,  # Query string authorization is not enabled
+}
 
 class SplunkPayloadError(aiohttp.ClientPayloadError):
     def __init__(self,code,message,status):
@@ -88,25 +107,6 @@ class hass_splunk:
         return True
 
     async def check(self, connectivity=True, token=True, busy=True):
-        codes = {
-            0: True,  # Success
-            1: not token,  # Token disabled
-            2: not token,  # Token is required
-            3: not token,  # Invalid authorization
-            4: not token,  # Invalid token
-            5: True,  # No data - Expected
-            6: True,  # Invalid data format
-            7: True,  # Incorrect index
-            8: False,  # Internal server error
-            9: not busy,  # Server is busy
-            10: False,  # Data channel is missing
-            11: False,  # Invalid data channel
-            12: None,  # Event field is required
-            13: None,  # Event field cannot be blank
-            14: None,  # ACK is disabled
-            15: None,  # Error in handling indexed fields
-            16: None,  # Query string authorization is not enabled
-        }
         try:
             async with self.session.post(
                 self.url,
@@ -119,4 +119,4 @@ class hass_splunk:
             return not connectivity
         except Exception:
             return False
-        return codes.get(reply["code"], False)
+        return CODES.get(reply["code"], False)
