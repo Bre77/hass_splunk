@@ -5,23 +5,23 @@ from collections import deque
 
 SPLUNK_PAYLOAD_LIMIT = 262144  # 256KB, Actual limit is 512KB/880MB depending on version.
 CODES = {
-    0: True,  # Success
-    1: not token,  # Token disabled
-    2: not token,  # Token is required
-    3: not token,  # Invalid authorization
-    4: not token,  # Invalid token
-    5: True,  # No data - Expected
-    6: True,  # Invalid data format
-    7: True,  # Incorrect index
-    8: False,  # Internal server error
-    9: not busy,  # Server is busy
-    10: False,  # Data channel is missing
-    11: False,  # Invalid data channel
-    12: None,  # Event field is required
-    13: None,  # Event field cannot be blank
-    14: None,  # ACK is disabled
-    15: None,  # Error in handling indexed fields
-    16: None,  # Query string authorization is not enabled
+    0: "Success",
+    1: "Token disabled",
+    2: "Token is required",
+    3: "Invalid authorization",
+    4: "Invalid token",
+    5: "No data - Expected",
+    6: "Invalid data format",
+    7: "Incorrect index",
+    8: "Internal server error",
+    9: "Server is busy",
+    10: "Data channel is missing",
+    11: "Invalid data channel",
+    12: "Event field is required",
+    13: "Event field cannot be blank",
+    14: "ACK is disabled",
+    15: "Error in handling indexed fields",
+    16: "Query string authorization is not enabled",
 }
 
 class SplunkPayloadError(aiohttp.ClientPayloadError):
@@ -119,4 +119,22 @@ class hass_splunk:
             return not connectivity
         except Exception:
             return False
-        return CODES.get(reply["code"], False)
+        return {
+            0: True,  # Success
+            1: not token,  # Token disabled
+            2: not token,  # Token is required
+            3: not token,  # Invalid authorization
+            4: not token,  # Invalid token
+            5: True,  # No data - Expected
+            6: True,  # Invalid data format
+            7: True,  # Incorrect index
+            8: False,  # Internal server error
+            9: not busy,  # Server is busy
+            10: False,  # Data channel is missing
+            11: False,  # Invalid data channel
+            12: None,  # Event field is required
+            13: None,  # Event field cannot be blank
+            14: None,  # ACK is disabled
+            15: None,  # Error in handling indexed fields
+            16: None,  # Query string authorization is not enabled
+        }.get(reply["code"], False)
