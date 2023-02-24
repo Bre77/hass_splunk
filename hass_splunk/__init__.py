@@ -3,26 +3,7 @@ import asyncio
 import json
 from collections import deque
 
-SPLUNK_PAYLOAD_LIMIT = 262144  # 256KB, Actual limit is 512KB/880MB depending on version.
-CODES = {
-    0: "Success",
-    1: "Token disabled",
-    2: "Token is required",
-    3: "Invalid authorization",
-    4: "Invalid token",
-    5: "No data - Expected",
-    6: "Invalid data format",
-    7: "Incorrect index",
-    8: "Internal server error",
-    9: "Server is busy",
-    10: "Data channel is missing",
-    11: "Invalid data channel",
-    12: "Event field is required",
-    13: "Event field cannot be blank",
-    14: "ACK is disabled",
-    15: "Error in handling indexed fields",
-    16: "Query string authorization is not enabled",
-}
+SPLUNK_PAYLOAD_LIMIT = 512000  # 500KB, Actual limit is 512KB/880MB depending on version.
 
 class SplunkPayloadError(aiohttp.ClientPayloadError):
     def __init__(self,code,message,status):
@@ -43,7 +24,7 @@ class hass_splunk:
         use_ssl=True,
         verify_ssl=True,
         endpoint="collector/event",
-        timeout=5,
+        timeout=60,
     ):
         self.session = session
         self.url = f"{['http','https'][use_ssl]}://{host}:{port}/services/{endpoint}"
@@ -95,7 +76,7 @@ class hass_splunk:
                         if "code" not in reply or "text" not in reply:
                             resp.raise_for_status()
                         if reply["code"] != 0:
-                            if resp.status != 400: # Dont reque on status 400
+                            if resp.status in [500, 503]: # Only retry on server errors
                                 self.batch = events + self.batch
                             raise SplunkPayloadError(code=reply["code"],message=reply["text"],status=resp.status)
                         
