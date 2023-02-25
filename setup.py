@@ -9,6 +9,7 @@ setuptools.setup(
     author="Brett Adams",
     author_email="brett@ba.id.au",
     description="Async single threaded connector to Splunk HEC using an asyncio session",
+    license="MIT",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/Bre77/hass_splunk",
