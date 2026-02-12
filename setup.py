@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="hass_splunk",
-    version="0.1.3",
+    version="0.1.4",
     author="Brett Adams",
     author_email="brett@ba.id.au",
     description="Async single threaded connector to Splunk HEC using an asyncio session",
