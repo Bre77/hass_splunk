@@ -14,6 +14,8 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/Bre77/hass_splunk",
     packages=setuptools.find_packages(),
+    package_data={"hass_splunk": ["py.typed"]},
+    include_package_data=True,
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
