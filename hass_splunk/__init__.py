@@ -1,11 +1,20 @@
 import asyncio
 import json
+import logging
 from collections import deque
 from typing import Any, Deque, Dict, Optional, Union
 
 import aiohttp
 
+_LOGGER = logging.getLogger(__name__)
+
 SPLUNK_PAYLOAD_LIMIT = 512000  # 500KB, Actual limit is 512KB/880MB depending on version.
+
+# Bound the in-memory event queue so a Splunk outage or backpressure cannot grow
+# it without limit. With drop-oldest semantics this caps worst-case memory: Home
+# Assistant events are typically a few hundred bytes to ~1KB of JSON, so the
+# default keeps the buffer to a few MB even when Splunk is unreachable.
+DEFAULT_MAX_QUEUE = 8192
 
 
 class SplunkPayloadError(aiohttp.ClientPayloadError):
@@ -29,19 +38,56 @@ class hass_splunk:
         verify_ssl: bool = True,
         endpoint: str = "collector/event",
         timeout: Union[int, float] = 60,
+        max_queue: int = DEFAULT_MAX_QUEUE,
     ) -> None:
         self.session = session
         self.url = f"{['http', 'https'][use_ssl]}://{host}:{port}/services/{endpoint}"
         self.verify_ssl = verify_ssl
         self.headers = {"Authorization": f"Splunk {token}"}
         self.timeout = aiohttp.ClientTimeout(total=timeout)
-        self.batch: Deque[str] = deque()
+        self.max_queue = max_queue
+        # Bounded, drop-oldest buffer: appending to a full deque discards the
+        # oldest event so a Splunk outage cannot grow memory without limit.
+        self.batch: Deque[str] = deque(maxlen=max_queue)
         self.lock = asyncio.Lock()
+        # Tracks whether we are currently in a "dropping events" episode so the
+        # warning is emitted once per episode rather than once per dropped event.
+        self._dropping = False
+
+    def _note_dropped(self, count: int) -> None:
+        """Warn once per drop episode when the bounded queue discards events."""
+        if count <= 0:
+            return
+        if not self._dropping:
+            self._dropping = True
+            _LOGGER.warning(
+                "Splunk event queue full (max_queue=%d); dropping oldest events. "
+                "Splunk is likely unreachable or too slow to keep up.",
+                self.max_queue,
+            )
+
+    def _requeue(self, events: Deque[str]) -> None:
+        """Put un-sent events back at the front of the bounded queue.
+
+        Rebuilds the deque with the original ``maxlen`` so the cap and
+        drop-oldest semantics survive the requeue. Re-queued events go back to
+        the front (oldest first); if the combined length exceeds the cap the
+        oldest events are dropped.
+        """
+        combined = list(events)
+        combined.extend(self.batch)
+        overflow = len(combined) - self.max_queue if self.max_queue else 0
+        self.batch = deque(combined, maxlen=self.max_queue)
+        self._note_dropped(overflow)
 
     async def queue(self, payload: Any, send: bool = True) -> Optional[bool]:
         if not isinstance(payload, str):
             payload = json.dumps(payload)
 
+        # A full bounded deque drops its oldest event on append; detect that so
+        # the drop is logged rather than silently losing data.
+        if self.max_queue and len(self.batch) >= self.max_queue:
+            self._note_dropped(1)
         self.batch.append(payload)
         if send:
             return await self.send()
@@ -92,7 +138,7 @@ class hass_splunk:
                             resp.raise_for_status()
                         if typed_reply["code"] != 0:
                             if resp.status in [500, 503]:  # Only retry on server errors
-                                self.batch = events + self.batch
+                                self._requeue(events)
                             raise SplunkPayloadError(
                                 code=int(typed_reply["code"]),
                                 message=str(typed_reply["text"]),
@@ -105,9 +151,11 @@ class hass_splunk:
                     asyncio.TimeoutError,
                 ) as error:
                     # Requeue failed events before raising the error
-                    self.batch = events + self.batch
+                    self._requeue(events)
                     raise error
 
+        # The queue drained fully; a new outage starts a fresh drop episode.
+        self._dropping = False
         return True
 
     async def check(
